@@ -1,0 +1,21 @@
+we need you to incorporate a drip system of messages.
+
+Track each user’s last message date and message number in the Google Sheet.
+
+Send the first message to new users.
+
+After a set delay (e.g., 3 days), send the next message in the sequence if no reply or update.
+
+Repeat until all drip messages are sent or user responds.
+
+Update the sheet after each message with the current message number and timestamp.
+
+Skip users who have replied or completed the sequence.
+
+8n8 coding
+
+Excel sheets to gather engaged audience data (likes/comments) 
+
+Use Apify/gpt/LLM to gather & Segment clients based demographics
+
+Develop messaging workflow with visual studio
