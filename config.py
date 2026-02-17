@@ -1,23 +1,69 @@
 import os
+from dataclasses import dataclass
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
-# API Keys
-IG_SESSIONID = os.getenv("INSTAGRAM_SESSIONID")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Sheets Configuration
-SPREADSHEET_NAME = '50K SCRAPED LEADS IN PHOENIX'
-WORKSHEET_NAME = 'Sheet1'
-SERVICE_ACCOUNT_FILE = 'credentials.json'
-STATUS_COL = 13  # Column M
-MSG_NUMBER_COL = 14 # Column N (New for Drip)
-LAST_DATE_COL = 15  # Column O (New for Drip)
+# =============================
+# Core Configuration Model
+# =============================
 
-# Logic Settings
-DEFAULT_DM_DELAY = 1200
-TEST_MODE = False
-DRIP_DELAY_DAYS = 3
+@dataclass(frozen=True)
+class Settings:
+    # API Keys
+    instagram_session_id: str
+    gemini_api_key: str
 
-DEFAULT_DM_MESSAGE = """Hi! 👋 My name is John... (your full message here)"""
+    # Sheets
+    spreadsheet_name: str
+    worksheet_name: str
+    service_account_file: str
+
+    # Sheet Column Names (Header-based, no indexes)
+    col_status: str
+    col_message_number: str
+    col_last_message_date: str
+
+    # Runtime Logic
+    default_dm_delay_seconds: int
+    drip_delay_days: int
+    test_mode: bool
+
+    # Messaging
+    default_dm_message: str
+
+
+def _get_env(key: str, required: bool = True, default=None):
+    value = os.getenv(key, default)
+
+    if required and not value:
+        raise ValueError(f"Missing required environment variable: {key}")
+
+    return value
+
+
+settings = Settings(
+    # API
+    instagram_session_id=_get_env("INSTAGRAM_SESSIONID"),
+    gemini_api_key=_get_env("GEMINI_API_KEY"),
+
+    # Sheets
+    spreadsheet_name="50K SCRAPED LEADS IN PHOENIX",
+    worksheet_name="Sheet1",
+    service_account_file="credentials.json",
+
+    # Header-based column mapping (no magic numbers)
+    col_status="Status",
+    col_message_number="Message Number",
+    col_last_message_date="Last Message Date",
+
+    # Runtime
+    default_dm_delay_seconds=1200,
+    drip_delay_days=3,
+    test_mode=False,
+
+    # Default Message
+    default_dm_message="""Hi! 👋 My name is John... (your full message here)"""
+)
