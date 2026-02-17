@@ -1,35 +1,90 @@
 import time
+import logging
 from datetime import datetime
+from typing import Dict
+
 from modules.sheets import SheetsHandler
-from modules.instagram import login, is_valid_user, send_message
-from modules.ai_engine import generate_custom_dm
+from modules.instagram import InstagramClient
+from modules.ai_engine import AIEngine
 import config
 
-def run_bot():
-    if not login(): return
-    
-    db = SheetsHandler()
-    leads = db.get_all_leads()
 
-    for idx, row in enumerate(leads, start=2):
-        # 1. Extract and Check Status
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+class DripOrchestrator:
+    def __init__(self):
+        self.instagram = InstagramClient(
+            session_id=config.IG_SESSIONID,
+            test_mode=config.TEST_MODE
+        )
+
+        self.sheets = SheetsHandler(
+            service_account_file=config.SERVICE_ACCOUNT_FILE,
+            spreadsheet_name=config.SPREADSHEET_NAME,
+            worksheet_name=config.WORKSHEET_NAME
+        )
+
+        self.ai = AIEngine(
+            api_key=config.GEMINI_API_KEY,
+            default_message=config.DEFAULT_DM_MESSAGE
+        )
+
+    def extract_username(self, url: str) -> str:
+        return url.strip().rstrip("/").split("/")[-1]
+
+    def should_skip(self, row: Dict) -> bool:
+        if not row.get("INSTAGRAM URL"):
+            return True
+
+        status = str(row.get("Status", "")).lower()
+        if status in ["completed", "replied", "messaged ✅"]:
+            return True
+
+        return False
+
+    def process_lead(self, row: Dict, row_index: int):
         url = row.get("INSTAGRAM URL")
-        if not url or row.get("Status") == "completed": continue
+        username = self.extract_username(url)
 
-        # 2. Extract Username
-        username = url.strip().rstrip('/').split("/")[-1]
-        
-        # 3. Validate User
-        user = is_valid_user(username)
-        if user:
-            # 4. Generate & Send
-            msg = generate_custom_dm(user.biography)
-            if send_message(user.pk, msg):
-                db.update_lead(idx, config.STATUS_COL, "messaged ✅")
-                # Update timestamp for drip logic
-                db.update_lead(idx, config.LAST_DATE_COL, datetime.now().strftime("%Y-%m-%d"))
-            
+        user = self.instagram.get_valid_user(username)
+        if not user:
+            logger.info(f"User not valid: {username}")
+            return
+
+        message = self.ai.generate_custom_dm(user.get("biography"))
+
+        success = self.instagram.send_message(user.get("pk"), message)
+
+        if success:
+            updates = {
+                "Status": "messaged ✅",
+                "Last Message Date": datetime.now().strftime("%Y-%m-%d"),
+            }
+
+            self.sheets.update_lead_fields(row_index, updates)
+            logger.info(f"Message sent & sheet updated: {username}")
+
             time.sleep(config.DEFAULT_DM_DELAY)
 
+    def run(self):
+        if not self.instagram.login():
+            logger.error("Login failed. Bot aborted.")
+            return
+
+        leads = self.sheets.get_all_leads()
+
+        for idx, row in enumerate(leads, start=2):  # Start at row 2 (skip headers)
+            try:
+                if self.should_skip(row):
+                    continue
+
+                self.process_lead(row, idx)
+
+            except Exception:
+                logger.exception(f"Error processing row {idx}")
+
+
 if __name__ == "__main__":
-    run_bot()
+    DripOrchestrator().run()
