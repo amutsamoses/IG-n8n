@@ -1,0 +1,6 @@
+instagrapi
+gspread
+google-auth
+google-generativeai
+python-dotenv
+pandas
