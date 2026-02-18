@@ -3,9 +3,9 @@ import logging
 from datetime import datetime
 from typing import Dict
 
-from modules.sheets import SheetsHandler
-from modules.instagram import InstagramClient
-from modules.ai_engine import AIEngine
+from modules.sheets_service import SheetsHandler
+from modules.instagram_service import InstagramClient
+from modules.ai_engine_service import AIEngine
 import config
 
 
