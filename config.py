@@ -33,6 +33,15 @@ class Settings:
 
     # Messaging
     default_dm_message: str
+    
+    # Rate Limiting
+    min_delay_seconds: int
+    max_delay_seconds: int
+    max_daily_messages: int
+    max_sequence: int
+
+    # Drip Templates
+    drip_templates: dict
 
 
 def _get_env(key: str, required: bool = True, default=None):
@@ -65,5 +74,20 @@ settings = Settings(
     test_mode=False,
 
     # Default Message
-    default_dm_message="""Hi! 👋 My name is John... (your full message here)"""
+    default_dm_message="""Hi! 👋 My name is John... (your full message here)""",
+    
+    # Rate Limiting
+    min_delay_seconds=45,
+    max_delay_seconds=120,
+    max_daily_messages=25,
+    max_sequence=4,
+
+    # Drip Templates
+    drip_templates={
+        1: "Intro message template...",
+        2: "Value message template...",
+        3: "Social proof template...",
+        4: "CTA template..."
+    },
+    
 )

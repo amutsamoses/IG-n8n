@@ -6,6 +6,10 @@ from typing import Dict
 from modules.sheets_service import SheetsHandler
 from modules.instagram_service import InstagramClient
 from modules.ai_engine_service import AIEngine
+from modules.core.drip_engine import DripEngine
+from modules.core.rate_limiter import RateLimiter
+from modules.metrics import Metrics
+import config as settings
 import config
 
 
