@@ -1,11 +1,12 @@
+from email import message
 import time
 import logging
 from datetime import datetime
 from typing import Dict
 
-from modules.sheets_service import SheetsHandler
-from modules.instagram_service import InstagramClient
-from modules.ai_engine_service import AIEngine
+from modules.services.sheets_service import SheetsHandler
+from modules.services.instagram_service import InstagramClient
+from modules.services.ai_engine_service import AIEngine
 from modules.core.drip_engine import DripEngine
 from modules.core.rate_limiter import RateLimiter
 from modules.metrics import Metrics
@@ -20,20 +21,34 @@ logging.basicConfig(level=logging.INFO)
 class DripOrchestrator:
     def __init__(self):
         self.instagram = InstagramClient(
-            session_id=config.IG_SESSIONID,
-            test_mode=config.TEST_MODE
+            session_id=settings.instagram_session_id,
+            test_mode=settings.test_mode
         )
 
         self.sheets = SheetsHandler(
-            service_account_file=config.SERVICE_ACCOUNT_FILE,
-            spreadsheet_name=config.SPREADSHEET_NAME,
-            worksheet_name=config.WORKSHEET_NAME
+            service_account_file=settings.service_account_file,
+            spreadsheet_name=settings.spreadsheet_name,
+            worksheet_name=settings.worksheet_name
         )
 
         self.ai = AIEngine(
-            api_key=config.GEMINI_API_KEY,
-            default_message=config.DEFAULT_DM_MESSAGE
+            api_key=settings.gemini_api_key,
+            default_message=settings.default_dm_message
         )
+        
+        self.drip_engine = DripEngine(
+            delay_days=settings.drip_delay_days,
+            max_sequence=settings.max_sequence
+        )
+
+        self.rate_limiter = RateLimiter(
+            min_delay_seconds=settings.min_delay_seconds,
+            max_delay_seconds=settings.max_delay_seconds
+        )
+
+        self.metrics = Metrics()
+        self.sent_today = 0
+
 
     def extract_username(self, url: str) -> str:
         return url.strip().rstrip("/").split("/")[-1]
@@ -49,28 +64,54 @@ class DripOrchestrator:
         return False
 
     def process_lead(self, row: Dict, row_index: int):
+        if self.sent_today >= settings.max_daily_messages:
+            logger.info("Daily message cap reached.")
+            return False  # stop processing
+
+        if not self.drip_engine.should_send(row):
+            self.metrics.skipped += 1
+            return True
+
         url = row.get("INSTAGRAM URL")
         username = self.extract_username(url)
 
         user = self.instagram.get_valid_user(username)
         if not user:
-            logger.info(f"User not valid: {username}")
-            return
+            self.metrics.failed += 1
+            return True
 
-        message = self.ai.generate_custom_dm(user.get("biography"))
+        msg_number = self.drip_engine.next_message_number(row)
+        template = settings.drip_templates.get(msg_number)
+
+        message = self.ai.generate_custom_dm(user.get("biography"), template)
+
+    # Mark as sending (crash safety)
+        self.sheets.update_lead_fields(row_index, {
+            settings.col_status: "sending..."
+    })
 
         success = self.instagram.send_message(user.get("pk"), message)
 
         if success:
+            self.sent_today += 1
+            self.metrics.sent += 1
+
             updates = {
-                "Status": "messaged ✅",
-                "Last Message Date": datetime.now().strftime("%Y-%m-%d"),
-            }
+                settings.col_status: "completed" 
+                if self.drip_engine.mark_completed(msg_number)
+                else "messaged",
+                settings.col_message_number: msg_number,    
+                settings.col_last_message_date: datetime.now().strftime("%Y-%m-%d"),
+        }
 
             self.sheets.update_lead_fields(row_index, updates)
-            logger.info(f"Message sent & sheet updated: {username}")
 
-            time.sleep(config.DEFAULT_DM_DELAY)
+            self.rate_limiter.wait()
+        else:
+            self.metrics.failed += 1
+
+        return True
+
 
     def run(self):
         if not self.instagram.login():
@@ -83,11 +124,17 @@ class DripOrchestrator:
             try:
                 if self.should_skip(row):
                     continue
-
-                self.process_lead(row, idx)
+                
+                should_continue = self.process_lead(row, idx)
+                if not should_continue:
+                    logger.info("Stopping further processing for today.")
+                    break
 
             except Exception:
                 logger.exception(f"Error processing row {idx}")
+                
+        logger.info(f"Run complete: {self.metrics.report()}")
+
 
 
 if __name__ == "__main__":
