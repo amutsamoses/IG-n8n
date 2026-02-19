@@ -19,14 +19,13 @@ class DripEngine:
             return False
 
         if msg_number == 0:
-            return True  # first message immediately
+            return True
 
         if not last_date:
             return True
 
         last = datetime.strptime(last_date, "%Y-%m-%d")
         delta = (datetime.now() - last).days
-
         return delta >= self.delay_days
 
     def next_message_number(self, row: Dict) -> int:
