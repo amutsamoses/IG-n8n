@@ -1,4 +1,7 @@
-# InstagramAuto: Drip Messaging & AI-Powered Lead Engine
+# InstagramAuto: Drip Messaging & AI-Powered Lead Engine 
+
+i hope it works
+
 
 An automated outreach system that captures engaged Instagram users, segments them using AI, and executes a deterministic drip messaging sequence with state tracking in Google Sheets.
 
